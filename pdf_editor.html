@@ -4,9 +4,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF Text Editor</title>
+    <title>PDF Rich Text Editor</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
@@ -20,11 +20,12 @@
             --sidebar-bg: #1e293b;
             --text-color: #e2e8f0;
             --accent-color: #f43f5e;
-            /* Rose color for PDF theme */
             --accent-hover: #e11d48;
             --border-color: #334155;
             --editor-bg: #1e293b;
             --glass-bg: rgba(30, 41, 59, 0.7);
+            --paper-bg: #ffffff;
+            --paper-text: #000000;
         }
 
         * {
@@ -113,43 +114,32 @@
             flex: 1;
             height: calc(100vh - 60px);
             position: relative;
+            background-color: #334155;
+            /* Darker background for contrast with paper */
+            overflow: auto;
+            justify-content: center;
+            padding: 40px;
         }
 
         /* Editor Section */
-        .editor-pane {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background-color: var(--editor-bg);
-            padding: 20px;
-        }
-
-        .pane-header {
-            margin-bottom: 15px;
-            font-size: 0.9rem;
-            color: #94a3b8;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        textarea {
-            flex: 1;
-            width: 100%;
-            background-color: rgba(15, 23, 42, 0.5);
-            color: var(--text-color);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 20px;
-            resize: none;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 14px;
-            line-height: 1.6;
+        .editor-wrapper {
+            width: 210mm;
+            /* A4 width */
+            min-height: 297mm;
+            /* A4 height */
+            background-color: var(--paper-bg);
+            color: var(--paper-text);
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            padding: 20mm;
+            /* Standard margins */
             outline: none;
+            font-family: 'Times New Roman', serif;
+            /* Default PDF font */
+            font-size: 12pt;
         }
 
-        textarea:focus {
-            border-color: var(--accent-color);
+        .editor-wrapper:focus {
+            box-shadow: 0 0 0 2px var(--accent-color);
         }
 
         /* Loading Overlay */
@@ -189,19 +179,30 @@
         }
 
         .empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100%;
-            color: #64748b;
+            color: #94a3b8;
             text-align: center;
+            pointer-events: none;
         }
 
         .empty-state i {
             font-size: 4rem;
             margin-bottom: 20px;
             opacity: 0.5;
+        }
+
+        /* Helper classes for extracted content */
+        .pdf-line {
+            white-space: pre-wrap;
+            min-height: 1em;
+            margin-bottom: 2px;
         }
     </style>
 </head>
@@ -215,7 +216,7 @@
                 <i class="fa-solid fa-arrow-left"></i>
             </a>
             <i class="fa-solid fa-file-pdf fa-xl"></i>
-            <span>PDF Text Editor</span>
+            <span>PDF Rich Editor</span>
         </div>
         <div class="actions">
             <div class="file-input-wrapper">
@@ -231,20 +232,13 @@
     </header>
 
     <div class="container">
-        <div class="editor-pane">
-            <div class="pane-header">
-                <span>Extracted Text (Editable)</span>
-                <span id="pageCount">0 pages</span>
-            </div>
-
-            <div id="emptyState" class="empty-state">
-                <i class="fa-regular fa-file-pdf"></i>
-                <h2>No PDF Loaded</h2>
-                <p>Upload a PDF to extract and edit its text.</p>
-            </div>
-
-            <textarea id="editor" style="display: none;" placeholder="Text will appear here..."></textarea>
+        <div id="emptyState" class="empty-state">
+            <i class="fa-regular fa-file-pdf"></i>
+            <h2>No PDF Loaded</h2>
+            <p>Upload a PDF to extract and edit its text with formatting.</p>
         </div>
+
+        <div id="editor" class="editor-wrapper" contenteditable="true" style="display: none;"></div>
 
         <div id="loader" class="loader-overlay">
             <span class="loader"></span>
@@ -257,58 +251,95 @@
         const editor = document.getElementById('editor');
         const emptyState = document.getElementById('emptyState');
         const loader = document.getElementById('loader');
-        const pageCountLabel = document.getElementById('pageCount');
 
         pdfInput.addEventListener('change', async function (e) {
             const file = e.target.files[0];
             if (!file) return;
 
             loader.style.display = 'flex';
+            editor.innerHTML = ''; // Clear previous content
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
                 const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
 
-                let fullText = '';
-                pageCountLabel.textContent = `${pdf.numPages} pages`;
+                let htmlContent = "";
 
                 for (let i = 1; i <= pdf.numPages; i++) {
                     const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.0 });
                     const textContent = await page.getTextContent();
 
-                    let lastY, lastX;
-                    let pageText = "";
-
-                    // Sort items by Y (descending) then X (ascending) to ensure reading order
+                    // Sort items by Y (descending) then X (ascending)
                     const items = textContent.items.sort((a, b) => {
-                        if (Math.abs(a.transform[5] - b.transform[5]) > 5) {
+                        if (Math.abs(a.transform[5] - b.transform[5]) > 4) {
                             return b.transform[5] - a.transform[5]; // Top to bottom
                         }
                         return a.transform[4] - b.transform[4]; // Left to right
                     });
 
+                    // Group items into lines
+                    let lines = [];
+                    let currentLine = [];
+                    let lastY = -1;
+
                     for (const item of items) {
-                        const x = item.transform[4];
                         const y = item.transform[5];
-
-                        // Detect new line
-                        if (lastY !== undefined && Math.abs(y - lastY) > 10) {
-                            pageText += "\n";
+                        if (lastY !== -1 && Math.abs(y - lastY) > 4) {
+                            lines.push(currentLine);
+                            currentLine = [];
                         }
-                        // Detect space within line
-                        else if (lastX !== undefined && x - lastX > 10) {
-                            pageText += " ";
-                        }
-
-                        pageText += item.str;
+                        currentLine.push(item);
                         lastY = y;
-                        lastX = x + item.width;
                     }
+                    if (currentLine.length > 0) lines.push(currentLine);
 
-                    fullText += `--- Page ${i} ---\n\n${pageText}\n\n`;
+                    // Process lines to HTML
+                    lines.forEach(line => {
+                        if (line.length === 0) return;
+
+                        // Calculate indentation based on X coordinate
+                        // Assuming standard left margin is around 50px
+                        const firstItem = line[0];
+                        const x = firstItem.transform[4];
+                        const marginLeft = Math.max(0, x - 50); // Offset
+
+                        let lineHtml = `<div class="pdf-line" style="margin-left: ${marginLeft}px;">`;
+
+                        line.forEach(item => {
+                            const text = item.str;
+                            const fontName = item.fontName.toLowerCase();
+                            const fontSize = item.transform[0]; // Scale X is usually font size
+
+                            let styles = [];
+
+                            // Basic font size mapping
+                            styles.push(`font-size: ${Math.round(fontSize)}px`);
+
+                            // Basic bold detection
+                            if (fontName.includes('bold') || fontName.includes('black')) {
+                                styles.push('font-weight: bold');
+                            }
+
+                            // Basic italic detection
+                            if (fontName.includes('italic') || fontName.includes('oblique')) {
+                                styles.push('font-style: italic');
+                            }
+
+                            lineHtml += `<span style="${styles.join(';')}">${text}</span>`;
+                        });
+
+                        lineHtml += '</div>';
+                        htmlContent += lineHtml;
+                    });
+
+                    // Add page break visual if multiple pages (optional)
+                    if (i < pdf.numPages) {
+                        htmlContent += '<div style="break-after: page; border-bottom: 1px dashed #ccc; margin: 20px 0;"></div>';
+                    }
                 }
 
-                editor.value = fullText;
+                editor.innerHTML = htmlContent;
                 editor.style.display = 'block';
                 emptyState.style.display = 'none';
 
@@ -321,30 +352,22 @@
         });
 
         function savePDF() {
-            if (!editor.value) {
-                alert('No text to save!');
+            const element = document.getElementById('editor');
+            if (!element.innerText.trim()) {
+                alert('No content to save!');
                 return;
             }
 
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
+            const opt = {
+                margin: 10,
+                filename: 'edited_document.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
 
-            const text = editor.value;
-            const splitText = doc.splitTextToSize(text, 180); // Split to fit A4 width
-
-            let y = 10;
-            const pageHeight = doc.internal.pageSize.height;
-
-            splitText.forEach(line => {
-                if (y > pageHeight - 10) {
-                    doc.addPage();
-                    y = 10;
-                }
-                doc.text(line, 10, y);
-                y += 7;
-            });
-
-            doc.save('edited_text.pdf');
+            // Use html2pdf to save the element exactly as is
+            html2pdf().set(opt).from(element).save();
         }
     </script>
 </body>
