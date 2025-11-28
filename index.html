@@ -7,16 +7,16 @@
     <title>Removedor de Fondo & Paleta de Colores</title>
     <style>
         :root {
-            --color-primary: #00d9ff;
-            --color-bg: #0a0a0a;
-            --color-surface: #1a1a1a;
-            --color-text: #e0e0e0;
-            --color-text-secondary: #a0a0a0;
-            --color-border: #2a2a2a;
-            --color-success: #00ff88;
-            --color-error: #ff4466;
+            --color-primary: #0088cc;
+            --color-bg: #f5f5f5;
+            --color-surface: #ffffff;
+            --color-text: #333333;
+            --color-text-secondary: #666666;
+            --color-border: #e0e0e0;
+            --color-success: #00aa44;
+            --color-error: #dd3344;
             --radius-base: 8px;
-            --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.5);
+            --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
         * {
@@ -46,7 +46,7 @@
             margin: 0 0 10px 0;
             font-size: 32px;
             color: var(--color-primary);
-            text-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+            text-shadow: 0 0 20px rgba(0, 136, 204, 0.2);
         }
 
         .header p {
@@ -408,17 +408,17 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎨 Herramientas de Imagen</h1>
+            <h1>Herramientas de Imagen</h1>
             <p>Remueve fondos y extrae paletas de colores de tus imágenes</p>
             <a href="https://www.instagram.com/its.al0oo/" target="_blank" class="instagram-link">
-                📸 Si te sirvió sígueme en mi insta
+                si te gustó sigueme en if @its.al0oo
             </a>
         </div>
 
         <!-- Tabs -->
         <div class="tabs">
-            <button class="tab active" onclick="switchTab('remover')">🖼️ Remover Fondo</button>
-            <button class="tab" onclick="switchTab('palette')">🎨 Paleta de Colores</button>
+            <button class="tab active" onclick="switchTab('remover')">Remover Fondo</button>
+            <button class="tab" onclick="switchTab('palette')">Paleta de Colores</button>
         </div>
 
         <!-- Tab 1: Background Remover -->
@@ -427,7 +427,7 @@
                 <div class="card">
                     <h2>Imagen Original</h2>
                     <div class="upload-area" id="uploadArea1">
-                        <div class="upload-icon">📤</div>
+                        <div class="upload-icon">+</div>
                         <p class="upload-text">
                             <strong>Haz clic o arrastra</strong>
                             tu imagen aquí
@@ -447,13 +447,13 @@
                 <div class="card">
                     <h2>Imagen Procesada</h2>
                     <div id="outputPreview1" style="text-align: center; color: #666;">
-                        ⏳ Aquí aparecerá la imagen sin fondo
+                        Aquí aparecerá la imagen sin fondo
                     </div>
                     <div class="image-preview" id="resultPreview1" style="display: none;">
                         <img id="outputImg1" src="" alt="Resultado">
                     </div>
                     <button class="btn btn-primary download-btn" id="downloadBtn1" style="display: none;">
-                        ⬇️ Descargar PNG
+                        Descargar PNG
                     </button>
                 </div>
             </div>
@@ -461,7 +461,7 @@
             <div id="statusMessage1" class="status-message"></div>
 
             <div class="info-box">
-                <strong>💡 Cómo usar:</strong><br>
+                <strong>Cómo usar:</strong><br>
                 1. Carga una imagen (PNG, JPG, WEBP)<br>
                 2. La imagen se procesará automáticamente<br>
                 3. Descarga el resultado con fondo transparente
@@ -474,7 +474,7 @@
                 <div class="card">
                     <h2>Cargar Imagen</h2>
                     <div class="upload-area" id="uploadArea2">
-                        <div class="upload-icon">🎨</div>
+                        <div class="upload-icon">+</div>
                         <p class="upload-text">
                             <strong>Haz clic o arrastra</strong>
                             tu imagen aquí
@@ -494,12 +494,12 @@
                 <div class="card">
                     <h2>Paleta de Colores</h2>
                     <div id="palettePreview" style="text-align: center; color: #666; padding: 40px 0;">
-                        🎨 Aquí aparecerá tu paleta de colores
+                        Aquí aparecerá tu paleta de colores
                     </div>
                     <div id="colorPalette" class="color-palette" style="display: none;"></div>
                     <div class="palette-actions" id="paletteActions" style="display: none;">
-                        <button class="btn btn-primary" id="copyAllBtn">📋 Copiar Todos</button>
-                        <button class="btn btn-secondary" id="exportPaletteBtn">💾 Exportar JSON</button>
+                        <button class="btn btn-primary" id="copyAllBtn">Copiar Todos</button>
+                        <button class="btn btn-secondary" id="exportPaletteBtn">Exportar JSON</button>
                     </div>
                 </div>
             </div>
@@ -507,7 +507,7 @@
             <div id="statusMessage2" class="status-message"></div>
 
             <div class="info-box">
-                <strong>🎨 Cómo usar:</strong><br>
+                <strong>Cómo usar:</strong><br>
                 1. Carga una imagen con colores interesantes<br>
                 2. La paleta se generará automáticamente<br>
                 3. Haz clic en cualquier color para copiar su código HEX
@@ -572,7 +572,7 @@
                 showMessage(statusMessage1, `Imagen cargada: ${file.name}`, 'success');
                 resultPreview1.style.display = 'none';
                 downloadBtn1.style.display = 'none';
-                outputPreview1.innerHTML = '⏳ Aquí aparecerá la imagen sin fondo';
+                outputPreview1.innerHTML = 'Aquí aparecerá la imagen sin fondo';
 
                 processImage();
             };
@@ -647,7 +647,7 @@
             selectBtn1.style.display = 'block';
             clearBtn1.style.display = 'none';
             uploadArea1.style.opacity = '1';
-            outputPreview1.innerHTML = '⏳ Aquí aparecerá la imagen sin fondo';
+            outputPreview1.innerHTML = 'Aquí aparecerá la imagen sin fondo';
             statusMessage1.classList.remove('show');
         }
 
@@ -814,7 +814,7 @@
             colorPalette.style.display = 'none';
             paletteActions.style.display = 'none';
             palettePreview.style.display = 'block';
-            palettePreview.innerHTML = '🎨 Aquí aparecerá tu paleta de colores';
+            palettePreview.innerHTML = 'Aquí aparecerá tu paleta de colores';
             selectBtn2.style.display = 'block';
             clearBtn2.style.display = 'none';
             uploadArea2.style.opacity = '1';
