@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="es">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -294,9 +293,7 @@
         }
 
         @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
+            to { transform: rotate(360deg); }
         }
 
         .download-btn {
@@ -404,7 +401,6 @@
         }
     </style>
 </head>
-
 <body>
     <div class="container">
         <div class="header">
@@ -520,7 +516,7 @@
         function switchTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-
+            
             if (tab === 'remover') {
                 document.querySelector('.tab:nth-child(1)').classList.add('active');
                 document.getElementById('remover-tab').classList.add('active');
@@ -573,7 +569,7 @@
                 resultPreview1.style.display = 'none';
                 downloadBtn1.style.display = 'none';
                 outputPreview1.innerHTML = '⏳ Aquí aparecerá la imagen sin fondo';
-
+                
                 processImage();
             };
             reader.readAsDataURL(file);
@@ -586,7 +582,7 @@
             }
 
             showMessage(statusMessage1, '<span class="loader"></span> Procesando imagen...', 'info');
-
+            
             try {
                 const img = new Image();
                 img.onload = async () => {
@@ -604,7 +600,7 @@
                         const g = data[i + 1];
                         const b = data[i + 2];
                         const brightness = (r + g + b) / 3;
-
+                        
                         if (brightness > 230) {
                             data[i + 3] = 0;
                         } else {
@@ -618,7 +614,7 @@
                     resultPreview1.style.display = 'block';
                     outputPreview1.style.display = 'none';
                     downloadBtn1.style.display = 'inline-flex';
-
+                    
                     showMessage(statusMessage1, '✓ ¡Imagen procesada exitosamente!', 'success');
                 };
                 img.src = URL.createObjectURL(currentFile1);
@@ -693,7 +689,7 @@
                 clearBtn2.style.display = 'block';
                 uploadArea2.style.opacity = '0.5';
                 showMessage(statusMessage2, `Imagen cargada: ${file.name}`, 'success');
-
+                
                 extractColors(e.target.result);
             };
             reader.readAsDataURL(file);
@@ -701,21 +697,21 @@
 
         function extractColors(imageSrc) {
             showMessage(statusMessage2, '<span class="loader"></span> Extrayendo colores...', 'info');
-
+            
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-
+                
                 const maxSize = 100;
                 const scale = Math.min(maxSize / img.width, maxSize / img.height);
                 canvas.width = img.width * scale;
                 canvas.height = img.height * scale;
-
+                
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const data = imageData.data;
-
+                
                 const colorMap = {};
                 for (let i = 0; i < data.length; i += 4) {
                     const r = Math.round(data[i] / 10) * 10;
@@ -724,7 +720,7 @@
                     const key = `${r},${g},${b}`;
                     colorMap[key] = (colorMap[key] || 0) + 1;
                 }
-
+                
                 const sortedColors = Object.entries(colorMap)
                     .sort((a, b) => b[1] - a[1])
                     .slice(0, 5)
@@ -732,7 +728,7 @@
                         const [r, g, b] = color.split(',').map(Number);
                         return { r, g, b };
                     });
-
+                
                 currentColors = sortedColors;
                 displayPalette(sortedColors);
                 showMessage(statusMessage2, '✓ Paleta generada exitosamente!', 'success');
@@ -745,11 +741,11 @@
             palettePreview.style.display = 'none';
             colorPalette.style.display = 'flex';
             paletteActions.style.display = 'flex';
-
+            
             colors.forEach((color, index) => {
                 const hex = rgbToHex(color.r, color.g, color.b);
                 const rgb = `RGB(${color.r}, ${color.g}, ${color.b})`;
-
+                
                 const colorItem = document.createElement('div');
                 colorItem.className = 'color-item';
                 colorItem.innerHTML = `
@@ -795,7 +791,7 @@
                 hex: rgbToHex(c.r, c.g, c.b),
                 rgb: `rgb(${c.r}, ${c.g}, ${c.b})`
             }));
-
+            
             const json = JSON.stringify(palette, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -863,5 +859,4 @@
         }
     </script>
 </body>
-
 </html>
