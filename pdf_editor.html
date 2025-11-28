@@ -221,6 +221,17 @@
             transition: transform 0.1s ease-out;
         }
 
+        .page-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+            /* Allow clicking through to text */
+        }
+
         .page-content {
             width: 100%;
             height: 100%;
@@ -229,29 +240,38 @@
             color: black;
             font-family: 'Times New Roman', serif;
             overflow: hidden;
+            z-index: 1;
+            /* Above canvas */
         }
 
         /* Semantic Elements Styles for Editor */
-        .page-content p {
+        .page-content p,
+        .page-content h1,
+        .page-content h2,
+        .page-content h3 {
             margin-bottom: 0;
             line-height: 1.2;
             position: absolute;
             white-space: pre;
             cursor: text;
+            background-color: rgba(255, 255, 255, 0.8);
+            /* Mask original text, slightly transparent to blend if needed, but opaque is better for masking */
+            background-color: #ffffff;
+            padding: 0 2px;
+            /* Slight padding for better masking */
         }
 
         .page-content h1,
         .page-content h2,
         .page-content h3 {
             font-weight: bold;
-            position: absolute;
-            white-space: pre;
         }
 
         /* Selection & Focus */
         .page-content *:focus {
             outline: 2px solid rgba(59, 130, 246, 0.3);
-            background: rgba(59, 130, 246, 0.05);
+            background: rgba(59, 130, 246, 0.1);
+            z-index: 10;
         }
 
         /* --- Overlays --- */
@@ -453,38 +473,24 @@
                 const viewport = page.getViewport({ scale: 1.0 }); // Base scale
                 const textContent = await page.getTextContent();
 
-                // Calculate scale factor to normalize to A4 mm
-                // PDF units are usually points (1/72 inch)
-                // We want to map everything to our MM coordinate system
-
                 const widthPt = viewport.width;
                 const heightPt = viewport.height;
 
-                // Scale factor: convert PDF points to Millimeters
-                const scaleX = (CONFIG.A4_WIDTH_MM / widthPt) * (72 / 25.4) * CONFIG.MM_TO_PX; // Approximation fix
-                // Actually, let's stick to: PDF Point -> MM -> PX
-                // 1 PDF Point = 0.352778 mm
-
                 const items = textContent.items.map(item => {
-                    // Transform: [scaleX, skewY, skewX, scaleY, x, y]
-                    // PDF coordinates: Origin is Bottom-Left. We need Top-Left.
-
                     const x_pt = item.transform[4];
                     const y_pt = item.transform[5];
                     const fontHeight_pt = Math.sqrt(item.transform[0] * item.transform[0] + item.transform[1] * item.transform[1]);
 
-                    // Convert to mm
-                    // Note: y_pt is from bottom.
                     const x_mm = x_pt * CONFIG.PT_TO_MM;
-                    const y_mm = (heightPt - y_pt) * CONFIG.PT_TO_MM - (fontHeight_pt * CONFIG.PT_TO_MM); // Adjust for top-left origin
+                    const y_mm = (heightPt - y_pt) * CONFIG.PT_TO_MM - (fontHeight_pt * CONFIG.PT_TO_MM);
 
-                    const fontSize_pt = fontHeight_pt; // Simplified
+                    const fontSize_pt = fontHeight_pt;
 
                     return {
                         str: item.str,
                         x: x_mm,
                         y: y_mm,
-                        fontSize: fontSize_pt, // Keep in pt for CSS
+                        fontSize: fontSize_pt,
                         fontName: item.fontName,
                         width: item.width * CONFIG.PT_TO_MM,
                         height: item.height * CONFIG.PT_TO_MM,
@@ -492,14 +498,15 @@
                     };
                 });
 
-                return this.processItems(items);
+                return {
+                    blocks: this.processItems(items),
+                    page: page // Return page object for canvas rendering
+                };
             }
 
             processItems(items) {
-                // Group by Y coordinate (Lines)
-                // Sort by Y then X
                 items.sort((a, b) => {
-                    if (Math.abs(a.y - b.y) > 1) return a.y - b.y; // Tolerance 1mm
+                    if (Math.abs(a.y - b.y) > 1) return a.y - b.y;
                     return a.x - b.x;
                 });
 
@@ -507,18 +514,21 @@
                 let currentBlock = null;
 
                 items.forEach(item => {
-                    if (!item.str.trim()) return; // Skip empty
+                    if (!item.str.trim()) return;
 
-                    // Simple grouping logic: if same line (y similar)
-                    if (currentBlock && Math.abs(item.y - currentBlock.y) < 2) {
-                        // Same line, append
-                        // Check distance for space
+                    // Check if same line (y similar)
+                    const sameLine = currentBlock && Math.abs(item.y - currentBlock.y) < 2;
+
+                    // Check horizontal distance (for tables/columns)
+                    // If distance > 5mm, treat as separate block even if on same line
+                    const isFar = currentBlock && (item.x - (currentBlock.x + currentBlock.width)) > 5;
+
+                    if (sameLine && !isFar) {
                         const space = item.x - (currentBlock.x + currentBlock.width);
                         if (space > 1) currentBlock.text += " ";
                         currentBlock.text += item.str;
                         currentBlock.width += item.width + (space > 0 ? space : 0);
                     } else {
-                        // New block/line
                         if (currentBlock) blocks.push(currentBlock);
                         currentBlock = {
                             text: item.str,
@@ -527,10 +537,9 @@
                             fontSize: item.fontSize,
                             fontName: item.fontName,
                             width: item.width,
-                            type: 'p' // Default
+                            type: 'p'
                         };
 
-                        // Semantic detection
                         if (item.fontSize > 14) currentBlock.type = 'h1';
                         else if (item.fontSize > 12) currentBlock.type = 'h2';
                     }
@@ -556,13 +565,13 @@
                 ui.showLoader(true, "Leyendo PDF...");
                 try {
                     const numPages = await this.processor.loadFile(file);
-                    this.container.innerHTML = ''; // Clear
+                    this.container.innerHTML = '';
                     this.pages = [];
 
                     for (let i = 1; i <= numPages; i++) {
                         ui.updateProgress((i / numPages) * 100);
-                        const blocks = await this.processor.extractPage(i);
-                        this.renderPage(i, blocks);
+                        const { blocks, page } = await this.processor.extractPage(i);
+                        await this.renderPage(i, blocks, page);
                     }
 
                     this.saveState();
@@ -575,36 +584,51 @@
                 }
             }
 
-            renderPage(pageNum, blocks) {
+            async renderPage(pageNum, blocks, pdfPage) {
                 const pageDiv = document.createElement('div');
                 pageDiv.className = 'page';
                 pageDiv.dataset.page = pageNum;
 
-                // Set dimensions in px based on mm
                 const wPx = CONFIG.A4_WIDTH_MM * CONFIG.MM_TO_PX;
                 const hPx = CONFIG.A4_HEIGHT_MM * CONFIG.MM_TO_PX;
 
                 pageDiv.style.width = `${wPx}px`;
                 pageDiv.style.height = `${hPx}px`;
-                pageDiv.style.marginBottom = '40px'; // Gap
+                pageDiv.style.marginBottom = '40px';
 
+                // 1. Render PDF Background to Canvas
+                const canvas = document.createElement('canvas');
+                canvas.className = 'page-canvas';
+                canvas.width = wPx;
+                canvas.height = hPx;
+
+                // We need to render at high quality then scale down via CSS if needed, 
+                // but here we match 1:1 with editor pixels (which is 96 DPI approx)
+                // Actually, for better quality on retina, we might want 2x, but let's stick to 1x for performance first.
+                // To match dimensions:
+                const viewport = pdfPage.getViewport({ scale: wPx / pdfPage.getViewport({ scale: 1 }).width });
+
+                await pdfPage.render({
+                    canvasContext: canvas.getContext('2d'),
+                    viewport: viewport
+                }).promise;
+
+                pageDiv.appendChild(canvas);
+
+                // 2. Render Editable Text Overlay
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'page-content';
                 contentDiv.contentEditable = true;
 
-                // Render blocks
                 blocks.forEach(block => {
                     const el = document.createElement(block.type);
                     el.textContent = block.text;
 
-                    // Positioning
-                    // We use absolute positioning for fidelity
                     el.style.position = 'absolute';
                     el.style.left = `${block.x * CONFIG.MM_TO_PX}px`;
                     el.style.top = `${block.y * CONFIG.MM_TO_PX}px`;
                     el.style.fontSize = `${block.fontSize}pt`;
 
-                    // Styles
                     if (block.fontName.toLowerCase().includes('bold')) el.style.fontWeight = 'bold';
                     if (block.fontName.toLowerCase().includes('italic')) el.style.fontStyle = 'italic';
 
@@ -615,7 +639,6 @@
                 this.container.appendChild(pageDiv);
                 this.pages.push(pageDiv);
 
-                // Add listeners for undo/redo
                 contentDiv.addEventListener('input', () => this.debounceSave());
             }
 
@@ -625,8 +648,6 @@
 
                 this.container.style.transform = `scale(${this.zoom})`;
                 this.container.style.transformOrigin = 'top center';
-                // Adjust container width to center
-                // This is a simplified zoom implementation
             }
 
             format(command, value = null) {
@@ -744,20 +765,28 @@
                         format: 'a4'
                     });
 
-                    const pages = document.querySelectorAll('.page-content');
+                    const pages = document.querySelectorAll('.page');
 
                     for (let i = 0; i < pages.length; i++) {
                         if (i > 0) doc.addPage();
 
                         const page = pages[i];
-                        const elements = page.children;
+                        const canvas = page.querySelector('canvas');
+                        const content = page.querySelector('.page-content');
+
+                        // 1. Add Background Image (Canvas)
+                        if (canvas) {
+                            const bgData = canvas.toDataURL('image/jpeg', 0.8);
+                            doc.addImage(bgData, 'JPEG', 0, 0, 210, 297);
+                        }
+
+                        // 2. Add Vector Text Overlay
+                        const elements = content.children;
 
                         for (let el of elements) {
                             const style = window.getComputedStyle(el);
                             const text = el.textContent;
 
-                            // Parse positions (px -> mm)
-                            // Note: style.left is in px relative to page
                             const x_mm = parseFloat(style.left) / CONFIG.MM_TO_PX;
                             const y_mm = parseFloat(style.top) / CONFIG.MM_TO_PX;
 
@@ -769,12 +798,33 @@
 
                             doc.setFont("helvetica", isBold && isItalic ? "bolditalic" : isBold ? "bold" : isItalic ? "italic" : "normal");
 
-                            // Adjust Baseline:
-                            // HTML 'top' is roughly the ascender height. 
-                            // PDF text(x,y) draws at baseline.
-                            // We need to move Y down by approx 80% of font size.
                             const baselineOffset = (fontSize_pt * 0.352778) * 0.8;
 
+                            // To mimic the white background masking, we could draw a white rect behind text
+                            // doc.setFillColor(255, 255, 255);
+                            // doc.rect(x_mm, y_mm, width_mm, height_mm, 'F');
+                            // But calculating exact width/height is tricky without font metrics.
+                            // For now, we just draw text on top. If user deleted text, the background text remains...
+                            // Wait, if user DELETES text, they expect it gone.
+                            // BUT we are rendering the ORIGINAL PDF as background.
+                            // So if they delete text in editor, the ORIGINAL text shows through!
+                            // This is a fundamental limitation of "Background Image" approach.
+                            // To fix this, we need to "White Out" the area where text WAS.
+                            // But we don't know where original text was if we only have current DOM.
+
+                            // However, the user wants "lines" (signatures, tables).
+                            // The editable text has white background in CSS.
+                            // So in Editor, it looks fine.
+                            // In Export, we need to replicate that "White Background" for the text box.
+
+                            const textWidth = doc.getTextWidth(text);
+                            const textHeight = fontSize_pt * 0.352778;
+
+                            doc.setFillColor(255, 255, 255);
+                            // Draw a white rect behind the new text to mask the old text
+                            doc.rect(x_mm, y_mm, textWidth + 1, textHeight + 1, 'F'); // +1 padding
+
+                            doc.setTextColor(0, 0, 0);
                             doc.text(text, x_mm, y_mm + baselineOffset);
                         }
                     }
