@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF Text Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --sidebar-bg: #1e293b;
+            --text-color: #e2e8f0;
+            --accent-color: #f43f5e;
+            /* Rose color for PDF theme */
+            --accent-hover: #e11d48;
+            --border-color: #334155;
+            --editor-bg: #1e293b;
+            --glass-bg: rgba(30, 41, 59, 0.7);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Header */
+        header {
+            height: 60px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 10;
+        }
+
+        .logo {
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            background: rgba(244, 63, 94, 0.1);
+            color: var(--accent-color);
+            border: 1px solid var(--accent-color);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .btn:hover {
+            background: var(--accent-color);
+            color: white;
+            box-shadow: 0 0 15px rgba(244, 63, 94, 0.4);
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Main Container */
+        .container {
+            display: flex;
+            flex: 1;
+            height: calc(100vh - 60px);
+            position: relative;
+        }
+
+        /* Editor Section */
+        .editor-pane {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--editor-bg);
+            padding: 20px;
+        }
+
+        .pane-header {
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+            color: #94a3b8;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        textarea {
+            flex: 1;
+            width: 100%;
+            background-color: rgba(15, 23, 42, 0.5);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            resize: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: var(--accent-color);
+        }
+
+        /* Loading Overlay */
+        .loader-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            display: none;
+        }
+
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid var(--accent-color);
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            animation: rotation 1s linear infinite;
+            margin-bottom: 15px;
+        }
+
+        @keyframes rotation {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #64748b;
+            text-align: center;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="logo">
+            <a href="index.html"
+                style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 10px; margin-right: 15px;">
+                <i class="fa-solid fa-arrow-left"></i>
+            </a>
+            <i class="fa-solid fa-file-pdf fa-xl"></i>
+            <span>PDF Text Editor</span>
+        </div>
+        <div class="actions">
+            <div class="file-input-wrapper">
+                <button class="btn">
+                    <i class="fa-solid fa-upload"></i> Upload PDF
+                </button>
+                <input type="file" id="pdfInput" accept=".pdf">
+            </div>
+            <button class="btn" onclick="savePDF()">
+                <i class="fa-solid fa-download"></i> Save as PDF
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="editor-pane">
+            <div class="pane-header">
+                <span>Extracted Text (Editable)</span>
+                <span id="pageCount">0 pages</span>
+            </div>
+
+            <div id="emptyState" class="empty-state">
+                <i class="fa-regular fa-file-pdf"></i>
+                <h2>No PDF Loaded</h2>
+                <p>Upload a PDF to extract and edit its text.</p>
+            </div>
+
+            <textarea id="editor" style="display: none;" placeholder="Text will appear here..."></textarea>
+        </div>
+
+        <div id="loader" class="loader-overlay">
+            <span class="loader"></span>
+            <span>Processing PDF...</span>
+        </div>
+    </div>
+
+    <script>
+        const pdfInput = document.getElementById('pdfInput');
+        const editor = document.getElementById('editor');
+        const emptyState = document.getElementById('emptyState');
+        const loader = document.getElementById('loader');
+        const pageCountLabel = document.getElementById('pageCount');
+
+        pdfInput.addEventListener('change', async function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            loader.style.display = 'flex';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+
+                let fullText = '';
+                pageCountLabel.textContent = `${pdf.numPages} pages`;
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+
+                    fullText += `--- Page ${i} ---\n\n${pageText}\n\n`;
+                }
+
+                editor.value = fullText;
+                editor.style.display = 'block';
+                emptyState.style.display = 'none';
+
+            } catch (error) {
+                console.error(error);
+                alert('Error reading PDF: ' + error.message);
+            } finally {
+                loader.style.display = 'none';
+            }
+        });
+
+        function savePDF() {
+            if (!editor.value) {
+                alert('No text to save!');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const text = editor.value;
+            const splitText = doc.splitTextToSize(text, 180); // Split to fit A4 width
+
+            let y = 10;
+            const pageHeight = doc.internal.pageSize.height;
+
+            splitText.forEach(line => {
+                if (y > pageHeight - 10) {
+                    doc.addPage();
+                    y = 10;
+                }
+                doc.text(line, 10, y);
+                y += 7;
+            });
+
+            doc.save('edited_text.pdf');
+        }
+    </script>
+</body>
+
+</html>
