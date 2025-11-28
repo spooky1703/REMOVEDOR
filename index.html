@@ -427,6 +427,39 @@
             gap: 10px;
             margin-top: 15px;
         }
+
+        /* Form Controls */
+        .form-control {
+            width: 100%;
+            padding: 8px;
+            border-radius: var(--radius-base);
+            border: 1px solid var(--color-border);
+            background: var(--color-surface);
+            color: var(--color-text);
+            margin-bottom: 10px;
+        }
+
+        .control-group {
+            margin-bottom: 12px;
+        }
+
+        .control-group label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 4px;
+            color: var(--color-text-secondary);
+        }
+
+        .checkbox-label {
+            display: flex !important;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+
+        input[type="range"] {
+            width: 100%;
+        }
     </style>
 </head>
 
@@ -606,7 +639,7 @@
             reader.readAsDataURL(file);
         }
 
-        async function processImage() {
+        function processImage() {
             if (!currentFile1) {
                 showMessage(statusMessage1, 'Por favor carga una imagen primero', 'error');
                 return;
