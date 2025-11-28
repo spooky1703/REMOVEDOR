@@ -254,11 +254,12 @@
             position: absolute;
             white-space: pre;
             cursor: text;
-            background-color: rgba(255, 255, 255, 0.8);
-            /* Mask original text, slightly transparent to blend if needed, but opaque is better for masking */
             background-color: #ffffff;
-            padding: 0 2px;
-            /* Slight padding for better masking */
+            box-shadow: 0 0 0 3px #ffffff;
+            /* Halo to mask underlying text */
+            border-radius: 2px;
+            z-index: 10;
+            padding: 0 1px;
         }
 
         .page-content h1,
