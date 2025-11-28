@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <!-- Fonts & Icons -->
     <link
@@ -141,6 +142,23 @@
             font-family: 'JetBrains Mono', monospace;
             font-size: 0.9rem;
             color: #94a3b8;
+        }
+
+        .export-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        select {
+            background: var(--bg-dark);
+            color: var(--text-light);
+            border: 1px solid var(--border);
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 0.9rem;
         }
 
         /* --- Workspace --- */
@@ -365,9 +383,15 @@
 
         <div style="flex: 1;"></div>
 
-        <button class="btn-primary" onclick="exporter.exportPDF()">
-            <i class="fa-solid fa-file-export"></i> Exportar PDF
-        </button>
+        <div class="export-controls">
+            <select id="exportMode">
+                <option value="visual">Modo Visual (Imagen Exacta)</option>
+                <option value="vector">Modo Vectorial (Texto Seleccionable)</option>
+            </select>
+            <button class="btn-primary" onclick="exporter.exportPDF()">
+                <i class="fa-solid fa-file-export"></i> Exportar
+            </button>
+        </div>
     </div>
 
     <!-- Workspace -->
@@ -600,6 +624,7 @@
                 document.getElementById('zoomLevel').textContent = `${Math.round(this.zoom * 100)}%`;
 
                 this.container.style.transform = `scale(${this.zoom})`;
+                this.container.style.transformOrigin = 'top center';
                 // Adjust container width to center
                 // This is a simplified zoom implementation
             }
@@ -662,8 +687,55 @@
         // --- Exporter Logic ---
         class Exporter {
             async exportPDF() {
-                ui.showLoader(true, "Generando PDF Vectorial...");
+                const mode = document.getElementById('exportMode').value;
 
+                if (mode === 'visual') {
+                    await this.exportVisual();
+                } else {
+                    await this.exportVector();
+                }
+            }
+
+            async exportVisual() {
+                ui.showLoader(true, "Generando PDF Visual (Alta Fidelidad)...");
+                try {
+                    const { jsPDF } = window.jspdf;
+                    const doc = new jsPDF({
+                        orientation: 'portrait',
+                        unit: 'mm',
+                        format: 'a4'
+                    });
+
+                    const pages = document.querySelectorAll('.page');
+
+                    for (let i = 0; i < pages.length; i++) {
+                        if (i > 0) doc.addPage();
+
+                        const page = pages[i];
+                        // Capture at high scale for quality
+                        const canvas = await html2canvas(page, {
+                            scale: 2,
+                            useCORS: true,
+                            logging: false
+                        });
+
+                        const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                        doc.addImage(imgData, 'JPEG', 0, 0, 210, 297);
+                        ui.updateProgress(((i + 1) / pages.length) * 100);
+                    }
+
+                    doc.save("documento_visual.pdf");
+                    ui.setStatus("PDF Visual Exportado");
+                } catch (e) {
+                    console.error(e);
+                    alert("Error exportando visual: " + e.message);
+                } finally {
+                    ui.showLoader(false);
+                }
+            }
+
+            async exportVector() {
+                ui.showLoader(true, "Generando PDF Vectorial...");
                 try {
                     const { jsPDF } = window.jspdf;
                     const doc = new jsPDF({
@@ -678,57 +750,41 @@
                         if (i > 0) doc.addPage();
 
                         const page = pages[i];
-                        // Iterate over elements
-                        // Note: This assumes flat structure (p, h1, etc directly in page)
-                        // For a robust editor, we would traverse recursively.
-
                         const elements = page.children;
+
                         for (let el of elements) {
                             const style = window.getComputedStyle(el);
                             const text = el.textContent;
 
-                            // Get position in px relative to page
-                            const rect = el.getBoundingClientRect();
-                            const pageRect = page.getBoundingClientRect();
-
-                            // Convert relative px to mm
-                            // Note: We must account for Zoom!
-                            // Best way is to read the 'left'/'top' styles directly if set, 
-                            // or calculate un-zoomed coordinates.
-
-                            // Since we set left/top in style as px (mapped from mm), we can parse them.
-                            // If user moved them, we need computed style.
-
-                            // Reverse the MM_TO_PX calculation
+                            // Parse positions (px -> mm)
+                            // Note: style.left is in px relative to page
                             const x_mm = parseFloat(style.left) / CONFIG.MM_TO_PX;
                             const y_mm = parseFloat(style.top) / CONFIG.MM_TO_PX;
 
-                            // Font size
-                            const fontSize_pt = parseFloat(style.fontSize); // usually in px or pt
-                            // jsPDF uses pt for font size by default even if unit is mm? No, unit affects coordinates.
-                            // setFontSize is in points.
+                            const fontSize_pt = parseFloat(style.fontSize);
+                            doc.setFontSize(fontSize_pt);
 
-                            doc.setFontSize(fontSize_pt); // style.fontSize might be "16px", need to ensure pt
-
-                            // Font Style
                             const isBold = parseInt(style.fontWeight) >= 600 || style.fontWeight === 'bold';
                             const isItalic = style.fontStyle === 'italic';
 
                             doc.setFont("helvetica", isBold && isItalic ? "bolditalic" : isBold ? "bold" : isItalic ? "italic" : "normal");
 
-                            // Add Text
-                            // Adjust Y: HTML text top-left vs PDF baseline
-                            // Simple approximation: add font size * 0.8
-                            doc.text(text, x_mm, y_mm + (fontSize_pt * 0.352 * 0.8));
+                            // Adjust Baseline:
+                            // HTML 'top' is roughly the ascender height. 
+                            // PDF text(x,y) draws at baseline.
+                            // We need to move Y down by approx 80% of font size.
+                            const baselineOffset = (fontSize_pt * 0.352778) * 0.8;
+
+                            doc.text(text, x_mm, y_mm + baselineOffset);
                         }
                     }
 
-                    doc.save("documento_editado.pdf");
-                    ui.setStatus("PDF Exportado con éxito");
+                    doc.save("documento_vectorial.pdf");
+                    ui.setStatus("PDF Vectorial Exportado");
 
                 } catch (e) {
                     console.error(e);
-                    alert("Error exportando: " + e.message);
+                    alert("Error exportando vectorial: " + e.message);
                 } finally {
                     ui.showLoader(false);
                 }
